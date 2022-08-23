@@ -26,11 +26,30 @@ export function mergeHead(nextDoc: Document): void {
   const oldNodes = getValidNodes(document);
   const nextNodes = getValidNodes(nextDoc);
 
-  const { staleNodes, freshNodes } = partitionNodes(oldNodes, nextNodes);
+  // const { staleNodes, freshNodes } = partitionNodes(oldNodes, nextNodes);
 
-  staleNodes.forEach((node) => node.remove());
+  // staleNodes.forEach((node) => node.remove());
 
-  document.head.append(...freshNodes);
+  // document.head.append(...freshNodes);
+
+  // Start merging: Make sure to keep the order of the head tag nextNode
+  let i = 0;
+  while (i < oldNodes.length && i < nextNodes.length) {
+    if (!oldNodes[i].isEqualNode(nextNodes[i])) {
+      oldNodes[i].replaceWith(nextNodes[i]);
+    }
+    i++;
+  }
+  let j = i;
+  while (j < oldNodes.length) {
+    oldNodes[j].remove();
+    j++;
+  }
+  j = i;
+  while (j < nextNodes.length) {
+    document.head.append(nextNodes[j]);
+    j++;
+  }
 }
 
 function partitionNodes(oldNodes: Element[], nextNodes: Element[]): PartitionedNodes {
@@ -80,11 +99,13 @@ type PartitionedNodes = {
 export function runScripts(): void {
   // Run scripts with data-reload attr
   const headScripts = document.head.querySelectorAll('[data-reload]');
-  headScripts.forEach(replaceAndRunScript);
+  // headScripts.forEach(replaceAndRunScript);
+  loadScriptSync(headScripts);
 
   // Run scripts in body
   const bodyScripts = document.body.querySelectorAll('script');
-  bodyScripts.forEach(replaceAndRunScript);
+  // bodyScripts.forEach(replaceAndRunScript);
+  loadScriptSync(bodyScripts);
 }
 
 // Private helper to re-execute scripts
@@ -96,4 +117,31 @@ function replaceAndRunScript(oldScript: HTMLScriptElement): void {
   }
   newScript.append(oldScript.textContent);
   oldScript.replaceWith(newScript);
+}
+
+// Load array scripts synchronously
+function loadScriptSync(scripts: NodeListOf<Element>, index: number = 0): void {
+  if(scripts.length == index){
+      return;
+  }
+
+  let oldScript = scripts[index];
+  const newScript = document.createElement('script');
+  const attrs = Array.from(oldScript.attributes);
+  for (const { name, value } of attrs) {
+    newScript.setAttribute(name, value);
+  }
+  newScript.append(oldScript.textContent);
+
+  // If exist src attribute, add event onload
+  if(newScript.src){
+    newScript.onload = function () {
+      loadScriptSync(scripts, ++index)
+    };
+    oldScript.replaceWith(newScript);
+  }
+  else{
+    oldScript.replaceWith(newScript);
+    loadScriptSync(scripts, ++index)
+  }
 }
